@@ -6,7 +6,6 @@ library(odbc)
 library(shiny)
 library(shinyjs)
 
-# Define UI for application that draws a histogram
 ui <- dashboardPage(
     dashboardHeader(title = "Candev"),
     dashboardSidebar(
