@@ -13,11 +13,31 @@ ui <- dashboardPage(
     dashboardSidebar(
         sidebarMenu(
             menuItem("Authentification",tabName = "aut", icon = icon("trophy",lib = 'font-awesome')),
-            #Employee Sidebar
-            menuItemOutput("apt"),
-            menuItemOutput("inv"),
-            menuItemOutput("ins"),
-            menuItemOutput("pat")
+            
+            #Receptionist Sidebar
+            menuItemOutput("aptR"), #to schedule and view,search appoints. So they need the option to edit that table in DB
+            menuItemOutput("recR"), #To view,search and edit past appoints/invoices/insurance claims
+            menuItemOutput("patR"), # to view,search and edit patient table
+            
+            #Dentist/hygenist Sidebar
+            menuItemOutput("aptD"), #to view ,search(not edit) appoints. So they need the option to edit that table in DB
+            menuItemOutput("patD"), # to view, search (not edit) patient table and patient records
+            
+            
+            # Client Sidebar - make sure accomodate for all "responsibilities"
+            menuItemOutput("home"), # upcoming appointments
+            menuItemOutput("aptC"), # all their past appointments, book new appointments
+            menuItemOutput("recC"), # View all record: incoices, insurance claims
+            
+            #Admin/Manager Sidebar
+            menuItemOutput("aptA"), #to schedule and view,search appoints. So they need the option to edit that table in DB
+            menuItemOutput("recA"), #To view,search and edit past appoints/invoices/insurance claims
+            menuItemOutput("patA"), # to look up a patient and return everything on that patient
+            menuItemOutput("empA"), # to look up a employee and return everything on that employee
+            menuItemOutput("sqlA") # Admin has the option to write their own sql queries.
+            
+            
+            
         )
     ),
     dashboardBody(
@@ -27,29 +47,89 @@ ui <- dashboardPage(
                         h1("Authentification"),
                         textInput(inputId = 'userName', label = 'User Name: ', value = "", width = NULL, placeholder = NULL),
                         passwordInput(inputId = 'password', label = 'Password: ', value = "", width = NULL, placeholder = NULL),
+                        selectInput(inputId = 'type',
+                                    label = 'Login as :',
+                                    choices = c('Client','Employee')
+                                    ),
                         textOutput("invalidLogin"),
                         actionButton("loginAction","Login",icon = icon("sync-alt",lib = 'font-awesome'))
                     )
             ),
-            tabItem('apt',
+            # Receptionist Sidebar items
+            tabItem('aptR',
                     fluidPage(
                         h1("Appointments"),
                         dataTableOutput('temp')
                         )
                     ),
-            tabItem('inv',
+            tabItem('recR',
                     fluidPage(
-                        h1("Invoices")
+                        h1("Records")
                     )
             ),
-            tabItem('ins',
-                    fluidPage(
-                        h1("Insurance Claims")
-                    )
-            ),
-            tabItem('pat',
+            tabItem('patR',
                     fluidPage(
                         h1("Patients")
+                    )
+            ),
+            # Dentist Hygenist sidebar items
+            tabItem('aptD',
+                    fluidPage(
+                      h1("Appointments"),
+                      dataTableOutput('temp')
+                    )
+            ),
+            tabItem('patD',
+                    fluidPage(
+                      h1("Patients")
+                    )
+            ),
+            #Client Sidebar
+            tabItem('home',
+                    fluidPage(
+                      h1("Home")
+                    )
+            ),
+            tabItem('aptC',
+                    fluidPage(
+                      h1("Appointments"),
+                      dataTableOutput('temp')
+                    )
+            ),
+            tabItem('recC',
+                    fluidPage(
+                      h1("Records")
+                    )
+            ),
+            # Admin/Manager Sidebar
+            tabItem('aptA',
+                    fluidPage(
+                      h1("Appointments"),
+                      dataTableOutput('temp')
+                    )
+            ),
+            tabItem('recA',
+                    fluidPage(
+                      h1("Records")
+                    )
+            ),
+            tabItem('patA',
+                    fluidPage(
+                      h1("Patients")
+                    )
+            ),
+            tabItem('empA',
+                    fluidPage(
+                      h1("Records")
+                    )
+            ),
+            tabItem('sqlA',
+                    fluidPage(
+                      h1("SQL"),
+                      textInput(inputId = 'sql', label = 'SQL: ', value = "", width = NULL, placeholder = NULL),
+                      actionButton("sqlGo","Go",icon = icon("sync-alt",lib = 'font-awesome')),
+                      dataTableOutput('sqlResults')
+                      
                     )
             )
         )
@@ -68,6 +148,7 @@ server <- function(input, output) {
     
     rv <- reactiveValues()
     rv <- reactiveValues(Authenticated=FALSE)
+
     
     #Observing the click of the login button
     observeEvent(input$loginAction,{
@@ -122,5 +203,3 @@ server <- function(input, output) {
 
 # Run the application 
 shinyApp(ui = ui, server = server)
-
-
