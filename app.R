@@ -1,4 +1,4 @@
-con <- dbConnect(RPostgres::Postgres(), host='web0.eecs.uottawa.ca', port='15432', dbname='clubi035', user='clubi035',password=pas)
+#con <- dbConnect(RPostgres::Postgres(), host='web0.eecs.uottawa.ca', port='15432', dbname='clubi035', user='clubi035',password=pas)
 
 library(shiny)
 library(shinydashboard)
@@ -61,11 +61,9 @@ ui <- dashboardPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
     
-    #here write query to get a data frame of named 'users' of users
-    user_id = c('user','employee')
-    password = c('userPass','employeePass')
-    users = cbind(user_id,password)
-    users = as.data.frame(users)
+  #return query of users
+  queryLogin = 'Select id as user_id ,password from users'
+  users = dbGetQuery(con,queryLogin)
     
     
     rv <- reactiveValues()
@@ -124,4 +122,5 @@ server <- function(input, output) {
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+
 
