@@ -1,3 +1,5 @@
+con <- dbConnect(RPostgres::Postgres(), host='web0.eecs.uottawa.ca', port='15432', dbname='clubi035', user='clubi035',password=pas)
+
 library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
@@ -11,6 +13,7 @@ ui <- dashboardPage(
     dashboardSidebar(
         sidebarMenu(
             menuItem("Authentification",tabName = "aut", icon = icon("trophy",lib = 'font-awesome')),
+            #Employee Sidebar
             menuItemOutput("apt"),
             menuItemOutput("inv"),
             menuItemOutput("ins"),
@@ -30,7 +33,8 @@ ui <- dashboardPage(
             ),
             tabItem('apt',
                     fluidPage(
-                        h1("Appointments")
+                        h1("Appointments"),
+                        dataTableOutput('temp')
                         )
                     ),
             tabItem('inv',
@@ -69,17 +73,19 @@ server <- function(input, output) {
     
     #Observing the click of the login button
     observeEvent(input$loginAction,{
-        #Not null user name and password
+        #Not null not string user name and password
         if( is.null(input$userName) | is.null(input$password) ){
             output$invalidLogin <- renderText({ 'Invalid Login' })
+            rv$Authenticated = FALSE
         }
         # User name is not valid of password is incorrect
         else if( !(input$userName %in% users$user_id) | 
             input$password != toString(users[which(users$user_id == input$userName),which(colnames(users) == 'password')])
             ){
             output$invalidLogin <- renderText({ 'Invalid Login' })
+            rv$Authenticated = FALSE
         } # else the user has been authenticated
-        else{
+        else if((input$userName %in% users$user_id) & input$password == toString(users[which(users$user_id == input$userName),which(colnames(users) == 'password')]) ){
             rv$Authenticated = TRUE
             output$invalidLogin <- renderText({ 'Successful authentification' })
         }
@@ -111,7 +117,11 @@ server <- function(input, output) {
         
     })
     
+    x = dbGetQuery(con,'Select * from artwork')
+    output$temp <- renderDataTable(x)
+    
 }
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+
