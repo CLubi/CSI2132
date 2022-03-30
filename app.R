@@ -77,30 +77,37 @@ ui <- dashboardPage(
             tabItem('aptA',
                     fluidPage(
                       h1("Appointments"),
-                      dataTableOutput('temp')
+                      DT::dataTableOutput('tableAPTA')
                     )
             ),
             tabItem('recA',
                     fluidPage(
-                      h1("Records")
+                      h1("Records"),
+                      DT::dataTableOutput('tableRECA')
                     )
             ),
             tabItem('patA',
                     fluidPage(
-                      h1("Patients")
+                      h1("Patients"),
+                      DT::dataTableOutput('tablePATA')
                     )
             ),
             tabItem('empA',
                     fluidPage(
-                      h1("Records")
+                      h1("Records"),
+                      DT::dataTableOutput('tableEMPA')
                     )
             ),
             tabItem('sqlA',
                     fluidPage(
                       h1("SQL"),
-                      textInput(inputId = 'sql', label = 'SQL: ', value = "", width = NULL, placeholder = NULL),
+                      h4("Statements that will return something. Example: Select statements"),
+                      textAreaInput(inputId = 'sql', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
                       actionButton("sqlGo","Go",icon = icon("sync-alt",lib = 'font-awesome')),
-                      dataTableOutput('sqlResults')
+                      DT::dataTableOutput('SQLA'),
+                      h4("Statements that will not return something. Examples: Alther, Delete, Drop, Insert statements"),
+                      textAreaInput(inputId = 'sql1', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
+                      actionButton("sqlGo1","Go",icon = icon("sync-alt",lib = 'font-awesome'))
 
                     )
             )
@@ -109,12 +116,14 @@ ui <- dashboardPage(
             # Dentist Hygenist sidebar items
             tabItem('aptD',
                     fluidPage(
-                      h1("Appointments")
+                      h1("Appointments"),
+                      DT::dataTableOutput('tableAPTD')
                     )
             ),
             tabItem('patD',
                     fluidPage(
-                      h1("Patients")
+                      h1("Patients"),
+                      DT::dataTableOutput('tablePATD')
                     )
             )
             ,
@@ -222,7 +231,8 @@ server <- function(input, output) {
     else if(rv$Authenticated == TRUE & input$type == 'Employee'){
 
       #find employee role_id
-      role_id = unique(users[which(users$user_id == input$userName),which(colnames(users) == 'role_id')])
+      role_id = unique(users[which(users$user_id == input$userName),which(colnames(users) == 'role_id')])[1]
+      employee_id = unique(users[which(users$user_id == input$userName),which(colnames(users) == 'employee_id')])[1]
 
       #if role_id is 1 then the user is a branch manager so output the branch manager tabs
       if(role_id == 1){
@@ -231,27 +241,42 @@ server <- function(input, output) {
         output$aptA <- renderMenu({
           menuItem("Appointments",tabName = "aptA", icon = icon("calendar-check",lib = 'font-awesome'))
         })
+        
+        queryAPTA = 'SELECT * FROM appointment order by id desc'
+        tableAPTA = dbGetQuery(con,queryAPTA)
+        output$tableAPTA <- DT::renderDataTable(tableAPTA,filter = 'top')
+        
 
         #output the records as Admin tab
         output$recA <- renderMenu({
           menuItem("Records",tabName = "recA", icon = icon("file-medical",lib = 'font-awesome'))
         })
+        
+        queryRECA = 'SELECT * FROM records order by id desc'
+        tableRECA = dbGetQuery(con,queryRECA)
+        output$tableRECA <- DT::renderDataTable(tableRECA,filter = 'top')
 
         #output the patient as an admin tab
         output$patA <- renderMenu({
           menuItem("Patients",tabName = "patA", icon = icon("hospital-user",lib = 'font-awesome'))
         })
+        queryPATA = 'SELECT * FROM patient order by id asc'
+        tablePATA = dbGetQuery(con,queryPATA)
+        output$tablePATA <- DT::renderDataTable(tablePATA,filter = 'top')
 
         #output the employee as Admin tab
         output$empA <- renderMenu({
           menuItem("Employee",tabName = "empA", icon = icon("user-nurse",lib = 'font-awesome'))
         })
+        queryEMPA = 'SELECT * FROM employee order by id asc'
+        tableEMPA = dbGetQuery(con,queryEMPA)
+        output$tableEMPA <- DT::renderDataTable(tableEMPA,filter = 'top')
 
         #output the sql
         output$sqlA <- renderMenu({
           menuItem("SQL",tabName = "sqlA", icon = icon("code",lib = 'font-awesome'))
         })
-
+        
       }
 
       #if role_id is 2 or 3 then  then the user is a dentist or hygenist so output the hygienist/dentist tabs
@@ -261,11 +286,24 @@ server <- function(input, output) {
         output$aptD <- renderMenu({
           menuItem("Appointments",tabName = "aptD", icon = icon("calendar-check",lib = 'font-awesome'))
         })
+        
+        queryAPTD = paste('SELECT a.id as Appointment_ID, a.status,c.slot_date as Date, c.start_time, c.end_time, a.appt_type, a.room, a.patient_id, b.firstname,b.lastname, a.employee_id,a.invoice_id
+                            FROM appointment as a, patient as b, time_slot as c
+                            where employee_id =', employee_id, 
+                            'And a.patient_id = b.id
+                            And a.timeslot_id = c.id')
+        
+        tableAPTD = dbGetQuery(con,queryAPTD)
+        output$tableAPTD <- DT::renderDataTable(tableAPTD,filter = 'top')
 
         #output patient as dentist/hygienist tab
         output$patD <- renderMenu({
           menuItem("Patients",tabName = "patD", icon = icon("hospital-user",lib = 'font-awesome'))
         })
+        
+        queryPATD = paste('Select * from patient Where id in (Select distinct patient_id from appointment Where employee_id =',employee_id,')')
+        tablePATD = dbGetQuery(con,queryPATD)
+        output$tablePATD = DT::renderDataTable(tablePATD, filter = 'top')
 
       }
 
@@ -292,6 +330,35 @@ server <- function(input, output) {
 
     }
 
+  })
+  
+  #Admind SQL Statements
+  observeEvent(input$sqlGo,{
+    tableSQLA = dbGetQuery(con,input$sql)
+    output$SQLA <- DT::renderDataTable(tableSQLA,filter = 'top')
+  })
+  observeEvent(input$sqlGo1,{
+    #send the statement
+    dbSendStatement(con,input$sql1)
+    
+    #Rerendering all tables so that the changes can be shown in the app
+    ##Appointments
+    queryAPTA = 'SELECT * FROM appointment order by id desc'
+    tableAPTA = dbGetQuery(con,queryAPTA)
+    output$tableAPTA <- DT::renderDataTable(tableAPTA,filter = 'top')
+    ##Records
+    queryRECA = 'SELECT * FROM records order by id desc'
+    tableRECA = dbGetQuery(con,queryRECA)
+    output$tableRECA <- DT::renderDataTable(tableRECA,filter = 'top')
+    ##Patient
+    queryPATA = 'SELECT * FROM patient order by id asc'
+    tablePATA = dbGetQuery(con,queryPATA)
+    output$tablePATA <- DT::renderDataTable(tablePATA,filter = 'top')
+    ##Employee
+    queryEMPA = 'SELECT * FROM employee order by id asc'
+    tableEMPA = dbGetQuery(con,queryEMPA)
+    output$tableEMPA <- DT::renderDataTable(tableEMPA,filter = 'top')
+    
   })
   
 }
