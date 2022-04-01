@@ -9,7 +9,7 @@ library(shiny)
 library(shinyjs)
 
 ui <- dashboardPage(
-    dashboardHeader(title = "Dental clinic"),
+    dashboardHeader(title = "Dental Clinic"),
     dashboardSidebar(
         sidebarMenu(
             menuItem("Authentification",tabName = "aut", icon = icon("trophy",lib = 'font-awesome')),
@@ -51,7 +51,7 @@ ui <- dashboardPage(
                                     multiple = FALSE
                                     ),
                         textOutput("invalidLogin"),
-                        actionButton("loginAction","Login",icon = icon("sync-alt",lib = 'font-awesome'))
+                        actionButton("loginAction","Login",icon = icon("sign-in-alt",lib = 'font-awesome'))
                     )
             ),
             
@@ -105,7 +105,7 @@ ui <- dashboardPage(
                       textAreaInput(inputId = 'sql', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
                       actionButton("sqlGo","Go",icon = icon("sync-alt",lib = 'font-awesome')),
                       DT::dataTableOutput('SQLA'),
-                      h4("Statements that will not return something. Examples: Alther, Delete, Drop, Insert statements"),
+                      h4("Statements that will not return something. Examples: Alter, Delete, Drop, Insert statements"),
                       textAreaInput(inputId = 'sql1', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
                       actionButton("sqlGo1","Go",icon = icon("sync-alt",lib = 'font-awesome'))
 
