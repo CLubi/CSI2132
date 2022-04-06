@@ -1,12 +1,14 @@
+library(shiny)
+library(DBI)
+library(shinyjs)
+library(RPostgres)
+library(DT)
+library(data.table)
+library(lubridate)
+library(shinyalert)
+
 #con <- dbConnect(RPostgres::Postgres(), host='web0.eecs.uottawa.ca', port='15432', dbname='clubi035', user='clubi035',password=pas)
 
-library(shiny)
-library(shinydashboard)
-library(shinyWidgets)
-library(DBI)
-library(odbc)
-library(shiny)
-library(shinyjs)
 
 ui <- dashboardPage(
     dashboardHeader(title = "Dental clinic"),
@@ -77,19 +79,35 @@ ui <- dashboardPage(
             tabItem('aptA',
                     fluidPage(
                       h1("Appointments"),
-                      DT::dataTableOutput('tableAPTA')
+                      DTOutput('tableAPTA')
                     )
             ),
             tabItem('recA',
                     fluidPage(
+                      hr(),
                       h1("Records"),
-                      DT::dataTableOutput('tableRECA')
+                      column(6,offset = 6,
+                             HTML('<div class="btn-group" role="group" aria-label="Basic example" style = "padding:10px">'),
+                             ### tags$head() This is to change the color of "Add a new row" button
+                             tags$head(tags$style(".butt2{background-color:#231651;} .butt2{color: #e6ebef;}")),
+                             div(style="display:inline-block;width:30%;text-align: center;",actionButton(inputId = "RECA_Add_row",label = "Add", class="butt2") ),
+                             #tags$head(tags$style(".butt4{background-color:#4d1566;} .butt4{color: #e6ebef;}")),
+                             #div(style="display:inline-block;width:30%;text-align: center;",actionButton(inputId = "RECA_Mod_row",label = "Edit", class="butt4") ),
+                             tags$head(tags$style(".butt3{background-color:#590b25;} .butt3{color: #e6ebef;}")),
+                             div(style="display:inline-block;width:30%;text-align: center;",actionButton(inputId = "RECA_Del_row",label = "Delete", class="butt3") ),
+                             HTML('</div>') ),
+                      DT::dataTableOutput('tableRECA'),
+                      tags$script("$(document).on('click', '#tableRECA button', function () {
+                   Shiny.onInputChange('lastClickId',this.id);
+                   Shiny.onInputChange('lastClick', Math.random()) });"),
+                      actionButton(inputId = "Updated_RECA",label = "Save")
                     )
             ),
             tabItem('patA',
                     fluidPage(
                       h1("Patients"),
-                      DT::dataTableOutput('tablePATA')
+                      DT::dataTableOutput('tablePATA'),
+                      
                     )
             ),
             tabItem('empA',
@@ -101,11 +119,11 @@ ui <- dashboardPage(
             tabItem('sqlA',
                     fluidPage(
                       h1("SQL"),
-                      h4("Statements that will return something. Example: Select statements"),
+                      h4("Statements that will return something. Example: Select * from reviews "),
                       textAreaInput(inputId = 'sql', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
                       actionButton("sqlGo","Go",icon = icon("sync-alt",lib = 'font-awesome')),
                       DT::dataTableOutput('SQLA'),
-                      h4("Statements that will not return something. Examples: Alther, Delete, Drop, Insert statements"),
+                      h4("Statements that will not return something. Example: update patient set dob = '2000-01-01' where id = 5"),
                       textAreaInput(inputId = 'sql1', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
                       actionButton("sqlGo1","Go",icon = icon("sync-alt",lib = 'font-awesome'))
 
@@ -170,6 +188,9 @@ server <- function(input, output) {
   
   rv <- reactiveValues()
   rv <- reactiveValues(Authenticated=FALSE)
+  
+  rv <- reactiveValues(tableRECA = NULL)
+  rv <- reactiveValues(qr_RECA = c())
 
     
   #Observing the click of the login button
@@ -244,7 +265,7 @@ server <- function(input, output) {
         
         queryAPTA = 'SELECT * FROM appointment order by id desc'
         tableAPTA = dbGetQuery(con,queryAPTA)
-        output$tableAPTA <- DT::renderDataTable(tableAPTA,filter = 'top')
+        output$tableAPTA <- renderDT(tableAPTA,editable = 'all')
         
 
         #output the records as Admin tab
@@ -253,8 +274,8 @@ server <- function(input, output) {
         })
         
         queryRECA = 'SELECT * FROM records order by id desc'
-        tableRECA = dbGetQuery(con,queryRECA)
-        output$tableRECA <- DT::renderDataTable(tableRECA,filter = 'top')
+        rv$tableRECA = dbGetQuery(con,queryRECA)
+        output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
 
         #output the patient as an admin tab
         output$patA <- renderMenu({
@@ -332,7 +353,85 @@ server <- function(input, output) {
 
   })
   
-  #Admind SQL Statements
+# Admind table edit priviledges
+## Records tab
+  observeEvent(input$RECA_Add_row, {
+    ### This is the pop up board for input a new row in RECA table
+    showModal(modalDialog(title = "Add a new row",
+                          numericInput(paste0("RECA_id", input$RECA_Add_row), "ID:",0),  
+                          numericInput(paste0("RECA_employee_id", input$RECA_Add_row), "Employee ID:",0),
+                          actionButton("RECA_go", "Add item"),
+                          easyClose = TRUE, footer = NULL ))
+    
+  })
+  ### Add a new row to RECA table  
+  observeEvent(input$RECA_go, {
+    new_row=data.frame(
+      id=input[[paste0("RECA_id", input$RECA_Add_row)]],
+      employee_id=input[[paste0("RECA_employee_id", input$RECA_Add_row)]]
+      
+    )
+    rv$qr_RECA = c(rv$qr_RECA,
+      paste('insert into records (id, employee_id) values (',input[[paste0("RECA_id", input$RECA_Add_row)]],',',input[[paste0("RECA_employee_id", input$RECA_Add_row)]],')'
+            )
+    )
+    
+    removeModal()
+  })
+  
+  ### delete selected rows part
+  ### this is warning messge for deleting
+  observeEvent(input$RECA_Del_row,{
+    showModal(
+      if(length(input$tableRECA_rows_selected)>=1 ){
+        modalDialog(
+          title = "Warning",
+          paste("Are you sure delete",length(input$tableRECA_rows_selected),"rows?" ),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton("RECA_ok", "Yes")
+          ), easyClose = TRUE)
+      }else{
+        modalDialog(
+          title = "Warning",
+          paste("Please select the row(s) that you want to delete!" ),easyClose = TRUE
+        )
+      }
+      
+    )
+  })
+  
+  ### If user say OK, then delete the selected rows
+  observeEvent(input$RECA_ok, {
+    
+    for (i in 1:length(input$tableRECA_rows_selected)) {
+      dbSendStatement(con,paste('Delete from records where id = ',rv$tableRECA$id[input$tableRECA_rows_selected[i]]))
+    }
+    
+    queryRECA = 'SELECT * FROM records order by id desc'
+    rv$tableRECA = dbGetQuery(con,queryRECA)
+    output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
+    removeModal()
+    shinyalert(title = "Deleted!", type = "success")
+  })
+  
+  observeEvent(input$Updated_RECA,{
+    for (i in 1:length(rv$qr_RECA)) {
+      dbSendStatement(con,rv$qr_RECA[i])
+    }
+    queryRECA = 'SELECT * FROM records order by id desc'
+    rv$tableRECA = dbGetQuery(con,queryRECA)
+    output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
+    
+    rv$qr_RECA = c()
+    shinyalert(title = "Saved!", type = "success")
+    
+  })
+  
+  
+  
+  
+## Admin SQL tab
   observeEvent(input$sqlGo,{
     tableSQLA = dbGetQuery(con,input$sql)
     output$SQLA <- DT::renderDataTable(tableSQLA,filter = 'top')
@@ -348,8 +447,8 @@ server <- function(input, output) {
     output$tableAPTA <- DT::renderDataTable(tableAPTA,filter = 'top')
     ##Records
     queryRECA = 'SELECT * FROM records order by id desc'
-    tableRECA = dbGetQuery(con,queryRECA)
-    output$tableRECA <- DT::renderDataTable(tableRECA,filter = 'top')
+    rv$tableRECA = dbGetQuery(con,queryRECA)
+    output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
     ##Patient
     queryPATA = 'SELECT * FROM patient order by id asc'
     tablePATA = dbGetQuery(con,queryPATA)
