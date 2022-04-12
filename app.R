@@ -1,4 +1,5 @@
-#con <- dbConnect(RPostgres::Postgres(), host='web0.eecs.uottawa.ca', port='15432', dbname='clubi035', user='clubi035',password=pas)
+# To connect to your class DB, use the following command in your R console:
+# con <- dbConnect(RPostgres::Postgres(), host='web0.eecs.uottawa.ca', port='15432', dbname='<uottawa email prefix>', user='<uottawa email prefix>',password='<uottawa email password>')
 
 library(shiny)
 library(shinydashboard)
@@ -7,7 +8,11 @@ library(DBI)
 library(odbc)
 library(shiny)
 library(shinyjs)
+library(shinyTime)
 
+
+
+# UI
 ui <- dashboardPage(
     dashboardHeader(title = "Dental Clinic"),
     dashboardSidebar(
@@ -63,7 +68,52 @@ ui <- dashboardPage(
             ),
             tabItem('aptC',
                     fluidPage(
-                      h1("Appointments")
+                      h1("Appointments"),
+                      DT::dataTableOutput('tableAPTC'),
+                      h1("Book Appointment"),
+                      div(class = NA, style="display:inline-block",
+                        selectInput(inputId = 'apptPatientInput',
+                                    label = 'Patient',
+                                    "Patient Names",
+                                    selected = 'Patient',
+                                    multiple = FALSE )),
+                      div(class = NA, style="display:inline-block",
+                        selectInput(inputId = 'apptTypeInput',
+                                    label = 'Appointment Type',
+                                    choices=c("Cleaning","Whitening", "Fillings", "Extraction", "Root Canal", "Dentures"),
+                                    selected = 'Procedure',
+                                    multiple = FALSE )),
+                      div(class = NA, style="display:inline-block",
+                        selectInput(inputId = 'apptToothInput',
+                                    label = 'Tooth',
+                                    choices=c("All","Canine","Incisor", "Premolar", "1st Premolar", "2nd Premolar", "Molar","2nd Molar", "3rd Molar"),
+                                    selected = 'Alls',
+                                    multiple = TRUE )),
+                      div(class = NA, style="display:inline-block",
+                          selectInput(inputId = 'apptBranchInput',
+                                      label = 'Location',
+                                      choices=c("Ottawa", "Toronto"),
+                                      selected = 'Ottawa',
+                                      multiple = FALSE, width="200px" )),  
+                      div(class = NA, style="display:inline-block",
+                          selectInput(inputId = 'apptEmployeeInput',
+                                      label = 'Dentist / Hygienist',
+                                      choices= NULL,
+                                      selected = "",
+                                      multiple = FALSE, width="200px" )),
+                      div(class = NA, style="",
+                          dateInput(inputId = 'apptDateInput',
+                                      label = 'Date',
+                                      width = '200px',
+                                      daysofweekdisabled = c(0,6) )),
+                      div(class = NA, style="display:inline-block, margin-bottom:50px",
+                          timeInput(inputId="apptTimeInput", 
+                                    label="Time (24hr clock)", 
+                                    value = strptime("09:00:00", "%T"), 
+                                    seconds = FALSE,
+                                    minute.steps = 60)),
+                      textOutput("invalidBooking"),
+                      actionButton("bookAction","Book",icon = icon("calendar-plus",lib = 'font-awesome'))
                     )
             ),
             tabItem('recC',
@@ -152,7 +202,7 @@ ui <- dashboardPage(
 )
 
 # Define server logic required to draw a histogram
-server <- function(input, output) {
+server <- function(input, output, session) {
 
   #return query of users
   queryLogin = 'Select a.id as user_id,a.firstname,a.lastname, a.password, a.employee_id, b.role_id,c.role_name,d.patient_id
@@ -220,6 +270,23 @@ server <- function(input, output) {
 
       output$aptC <- renderMenu({
           menuItem("Appointments",tabName = "aptC", icon = icon("calendar-check",lib = 'font-awesome'))
+      })
+      
+      u_id = strtoi(input$userName, base=0L)
+      queryAPTC = paste('SELECT (P.firstname, P.lastname) AS "patient_name", A."appt_type", B."city" AS "branch", T."slot_date" AS "date", T."start_time" AS "time", (E.firstname, E.lastname) AS "employee_name", A."room", A."status", A."invoice_id" FROM appointment as A, patient as P, employee as E, time_slot as T, branch as B WHERE A.patient_id = P.id AND A.patient_id IN (SELECT patient_id FROM patient_user WHERE user_id = ',u_id,') AND A.employee_id = E.id AND A.timeslot_id = T.id AND E.branch_id = B.id order by patient_id asc',collapse=NULL)
+      tableAPTC = dbGetQuery(con,queryAPTC)
+      output$tableAPTC <- DT::renderDataTable(tableAPTC,filter = 'top')
+      
+      apptFormPatientsQ = paste("SELECT (P.firstname, P.lastname) AS \"Patients\" FROM patient as P, patient_user as R WHERE (R.patient_id = P.id) AND (R.user_id = ",u_id,")")
+      apptFormPatientsT = dbGetQuery(con,apptFormPatientsQ)
+      observe({
+        updateSelectInput(inputId = 'apptPatientInput', choices=apptFormPatientsT )
+      })
+      
+      observeEvent(input$apptBranchInput, {
+        employeeQuery = paste("SELECT (E.firstname, E.lastname) as \"employee_name\" FROM employee as E Full Join branch as B on E.branch_id = B.id WHERE ((E.role_id = 2) OR (E.role_id = 3)) AND B.city = \'", input$apptBranchInput,"\'", sep="", collapse=NULL)
+        choices = dbGetQuery(con,employeeQuery)
+        updateSelectInput(session, inputId = "apptEmployeeInput", choices = choices)
       })
       
       output$recC <- renderMenu({
@@ -358,7 +425,33 @@ server <- function(input, output) {
     queryEMPA = 'SELECT * FROM employee order by id asc'
     tableEMPA = dbGetQuery(con,queryEMPA)
     output$tableEMPA <- DT::renderDataTable(tableEMPA,filter = 'top')
+  })
+  
+  vb <- reactiveValues()
+  vb <- reactiveValues(Valid=FALSE)
+  
+  observeEvent(input$bookAction, {
     
+    employeeFirstName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][2]
+    employeeLastName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][3]
+    apptTime = strtoi(strftime(input$apptTimeInput, "%T"))
+    
+    employeeApptTimesQuery = paste("SELECT T.start_time, T.slot_date FROM time_slot as T Right Join appointment as A on T.id = A.timeslot_id Left Join employee as E on E.id = A.employee_id WHERE E.firstname = \'", employeeFirstName, "\' and E.lastname = \'",employeeLastName, "\'", sep="",collapse=NULL)
+    employeeApptTimesTable = dbGetQuery(con, employeeApptTimesQuery)
+    print(employeeApptTimesTable)
+    
+    print(apptTime %in% employeeApptTimesTable & input$apptDateInput == unique(employeeApptTimesTable[which(employeeApptTimesTable$start_time == apptTime),which(colnames(employeeApptTimesTable) == 'slot_date')]))
+        
+    if( is.null(input$apptToothInput)){
+      output$invalidBooking <- renderText({ 'Booking cannot be completed without tooth information.' })
+      vb$Valid = FALSE
+    }
+    else if ( 9 > strtoi(strftime(input$apptTimeInput, "%H"), base=0L) | strtoi(strftime(input$apptTimeInput, "%H"), base=0L) > 16){
+      output$invalidBooking <- renderText({ 'Booking time must be between 09h and 16h' })
+      vb$Valid = FALSE
+    } #else if (apptTime %in% employeeApptTimesTable & input$apptDateInput == unique(employeeApptTimesTable[which(employeeApptTimesTable$start_time == apptTime),which(colnames(employeeApptTimesTable) == 'slot_date')]  )){
+      #print("hello")
+    #}
   })
   
 }
