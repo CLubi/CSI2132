@@ -49,7 +49,7 @@ Create table appointment (
     patient_id int NOT NULL,
     employee_id int NOT NULL,
     timeslot_id int NOT NULL,
-    invoice_id int NOT NULL
+    invoice_id int
 );
 
 Create table appt_procedure (
