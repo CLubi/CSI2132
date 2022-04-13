@@ -118,7 +118,14 @@ ui <- dashboardPage(
             ),
             tabItem('recC',
                     fluidPage(
-                      h1("Records")
+                      h1("Records"),
+                      h2("Procedures"),
+                      DT::dataTableOutput('tablePROCC'),
+                      h2("Invoices"),
+                      DT::dataTableOutput('tableINVC'),
+                      h2("Insurance Claims and Payments"),
+                      DT::dataTableOutput('tableINSC'),
+                      
                     )
             )
             ,
@@ -181,17 +188,20 @@ ui <- dashboardPage(
             # Receptionist Sidebar items
             tabItem('aptR',
                     fluidPage(
-                      h1("Appointments")
+                      h1("Appointments"),
+                      DT::dataTableOutput('tableAPTR')
                     )
             ),
             tabItem('recR',
                     fluidPage(
-                      h1("Records")
+                      h1("Records"),
+                      DT::dataTableOutput('tableRECR')
                     )
             ),
             tabItem('patR',
                     fluidPage(
-                      h1("Patients")
+                      h1("Patients"),
+                      DT::dataTableOutput('tablePATR')
                     )
             )
             
@@ -276,6 +286,28 @@ server <- function(input, output, session) {
       queryAPTC = paste('SELECT (P.firstname, P.lastname) AS "patient_name", A."appt_type", B."city" AS "branch", T."slot_date" AS "date", T."start_time" AS "time", (E.firstname, E.lastname) AS "employee_name", A."room", A."status", A."invoice_id" FROM appointment as A, patient as P, employee as E, time_slot as T, branch as B WHERE A.patient_id = P.id AND A.patient_id IN (SELECT patient_id FROM patient_user WHERE user_id = ',u_id,') AND A.employee_id = E.id AND A.timeslot_id = T.id AND E.branch_id = B.id order by patient_id asc',collapse=NULL)
       tableAPTC = dbGetQuery(con,queryAPTC)
       output$tableAPTC <- DT::renderDataTable(tableAPTC,filter = 'top')
+      
+      queryPROCC = paste('SELECT D.id,T.slot_date, P.firstname, P.lastname, D.procedure_type, D.tooth, A.status, A.invoice_id
+                          FROM time_slot as T,
+                          appt_procedure as D Full Join appointment as A on D.appt_id = A.id 
+                          Left Join patient as P on P.id = A.patient_id
+                          Left Join patient_user as U on U.patient_id = P.id
+                          WHERE U.user_id = ', u_id ,' AND T.id = A.timeslot_id', sep='', collapse=NULL)
+      tablePROCC = dbGetQuery(con,queryPROCC)
+      output$tablePROCC <- DT::renderDataTable(tablePROCC,filter = 'top')
+      
+      queryINVC = paste('SELECT T.slot_date as "date", I.*
+                          FROM invoice as I Left Join appointment as A on A.invoice_id = I.id 
+                          Left Join patient_user as P on P.patient_id = A.patient_id, time_slot as T
+                          WHERE P.user_id = ', u_id ,' AND T.id = A.timeslot_id', sep='', collapse=NULL)
+      tableINVC = dbGetQuery(con,queryINVC)
+      output$tableINVC <- DT::renderDataTable(tableINVC,filter = 'top')
+      
+      queryINSC = paste('SELECT C.id as "claim id", C.insurance_method, C.claim_date, P.invoice_id, P.payment_method, P.payment_date
+                          FROM insurance_claim as C Full Join payment as P on P.id = C.payment_id, patient_user as U
+                          WHERE U.user_id = ', u_id, ' AND U.patient_id = C.patient_id', sep='', collapse=NULL)
+      tableINSC = dbGetQuery(con,queryINSC)
+      output$tableINSC <- DT::renderDataTable(tableINSC,filter = 'top')
       
       apptFormPatientsQ = paste("SELECT (P.firstname, P.lastname) AS \"Patients\" FROM patient as P, patient_user as R WHERE (R.patient_id = P.id) AND (R.user_id = ",u_id,")")
       apptFormPatientsT = dbGetQuery(con,apptFormPatientsQ)
@@ -434,13 +466,13 @@ server <- function(input, output, session) {
     
     employeeFirstName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][2]
     employeeLastName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][3]
-    apptTime = strtoi(strftime(input$apptTimeInput, "%T"))
+    apptTime = strftime(input$apptTimeInput, "%T")
     
     employeeApptTimesQuery = paste("SELECT T.start_time, T.slot_date FROM time_slot as T Right Join appointment as A on T.id = A.timeslot_id Left Join employee as E on E.id = A.employee_id WHERE E.firstname = \'", employeeFirstName, "\' and E.lastname = \'",employeeLastName, "\'", sep="",collapse=NULL)
     employeeApptTimesTable = dbGetQuery(con, employeeApptTimesQuery)
     print(employeeApptTimesTable)
     
-    print(apptTime %in% employeeApptTimesTable & input$apptDateInput == unique(employeeApptTimesTable[which(employeeApptTimesTable$start_time == apptTime),which(colnames(employeeApptTimesTable) == 'slot_date')]))
+    #print((apptTime %in% employeeApptTimesTable$start_time) & input$apptDateInput %in% employeeApptTimesTable[which(employeeApptTimesTable$start_time == apptTime),which(colnames(employeeApptTimesTable) == 'slot_date')])
         
     if( is.null(input$apptToothInput)){
       output$invalidBooking <- renderText({ 'Booking cannot be completed without tooth information.' })
@@ -449,9 +481,7 @@ server <- function(input, output, session) {
     else if ( 9 > strtoi(strftime(input$apptTimeInput, "%H"), base=0L) | strtoi(strftime(input$apptTimeInput, "%H"), base=0L) > 16){
       output$invalidBooking <- renderText({ 'Booking time must be between 09h and 16h' })
       vb$Valid = FALSE
-    } #else if (apptTime %in% employeeApptTimesTable & input$apptDateInput == unique(employeeApptTimesTable[which(employeeApptTimesTable$start_time == apptTime),which(colnames(employeeApptTimesTable) == 'slot_date')]  )){
-      #print("hello")
-    #}
+    }
   })
   
 }
