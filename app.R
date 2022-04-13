@@ -160,11 +160,13 @@ ui <- dashboardPage(
                       h1("SQL"),
                       h4("Statements that will return something. Example: Select statements"),
                       textAreaInput(inputId = 'sql', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
-                      actionButton("sqlGo","Go",icon = icon("sync-alt",lib = 'font-awesome')),
+                      textOutput("sqlInvalid"),
+                      actionButton("sqlGo","Go",icon = icon("play",lib = 'font-awesome')),
                       DT::dataTableOutput('SQLA'),
                       h4("Statements that will not return something. Examples: Alter, Delete, Drop, Insert statements"),
                       textAreaInput(inputId = 'sql1', label = 'SQL: ', value = "", width = '100%',height = '50px', placeholder = NULL),
-                      actionButton("sqlGo1","Go",icon = icon("sync-alt",lib = 'font-awesome'))
+                      textOutput("sql1Invalid"),
+                      actionButton("sqlGo1","Go",icon = icon("play",lib = 'font-awesome'))
 
                     )
             )
@@ -189,18 +191,30 @@ ui <- dashboardPage(
             tabItem('aptR',
                     fluidPage(
                       h1("Appointments"),
+                      textAreaInput(inputId = 'sql2', label = 'Insert appointments:', value = "INSERT INTO appointment VALUES (id, 'appt_type', 'room', 'status', patient_id, employee_id, timeslot_id, invoice_id)", width = '100%',height = '50px', placeholder = NULL),
+                      textOutput("sql2Invalid"),
+                      actionButton("sqlGo2","Go",icon = icon("play",lib = 'font-awesome')),
                       DT::dataTableOutput('tableAPTR')
                     )
             ),
             tabItem('recR',
                     fluidPage(
                       h1("Records"),
-                      DT::dataTableOutput('tableRECR')
+                      h2("Invoices"),
+                      DT::dataTableOutput('tableINVR'),
+                      h2("Payments"),
+                      DT::dataTableOutput('tablePAYR'),
+                      h2("Insurance Claims"),
+                      DT::dataTableOutput('tableINSR')
+                      
                     )
             ),
             tabItem('patR',
                     fluidPage(
                       h1("Patients"),
+                      textAreaInput(inputId = 'sql3', label = 'Add patients:', value = "INSERT INTO patient VALUES (id, 'firstname', 'lastname', ssn, 'gender', 'email', phonenumber, 'dob')", width = '100%',height = '50px', placeholder = NULL),
+                      textOutput("sql3Invalid"),
+                      actionButton("sqlGo3","Go",icon = icon("play",lib = 'font-awesome')),
                       DT::dataTableOutput('tablePATR')
                     )
             )
@@ -414,15 +428,35 @@ server <- function(input, output, session) {
           menuItem("Appointments",tabName = "aptR", icon = icon("calendar-check",lib = 'font-awesome'))
         })
 
+        queryAPTR = paste('SELECT * FROM appointment')
+        tableAPTR = dbGetQuery(con,queryAPTR)
+        output$tableAPTR <- DT::renderDataTable(tableAPTR,filter = 'top')
+        
         #output the records as a receptionist tab
         output$recR <- renderMenu({
           menuItem("Records",tabName = "recR", icon = icon("file-medical",lib = 'font-awesome'))
         })
 
+        queryINVR = paste('SELECT * FROM invoice')
+        tableINVR = dbGetQuery(con,queryINVR)
+        output$tableINVR <- DT::renderDataTable(tableINVR,filter = 'top')
+        
+        queryINSR = paste('SELECT * FROM insurance_claim')
+        tableINSR = dbGetQuery(con,queryINSR)
+        output$tableINSR <- DT::renderDataTable(tableINSR,filter = 'top')
+        
+        queryPAYR = paste('SELECT * FROM payment')
+        tablePAYR = dbGetQuery(con,queryPAYR)
+        output$tablePAYR <- DT::renderDataTable(tablePAYR,filter = 'top')
+        
         #output patient as receptionist tab
         output$patR <- renderMenu({
           menuItem("Patients",tabName = "patR", icon = icon("hospital-user",lib = 'font-awesome'))
         })
+        
+         queryPATR = paste('SELECT * FROM patient')
+        tablePATR = dbGetQuery(con,queryPATR)
+        output$tablePATR <- DT::renderDataTable(tablePATR,filter = 'top')
 
       }
 
@@ -433,12 +467,26 @@ server <- function(input, output, session) {
   
   #Admind SQL Statements
   observeEvent(input$sqlGo,{
-    tableSQLA = dbGetQuery(con,input$sql)
-    output$SQLA <- DT::renderDataTable(tableSQLA,filter = 'top')
+    
+    query = tryCatch({
+      tableSQLA = dbGetQuery(con,input$sql)
+      output$sqlInvalid <- renderText({ '' })
+      output$SQLA <- DT::renderDataTable(tableSQLA,filter = 'top')
+    }, error = function(e){
+      output$sqlInvalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
+    })
+    
   })
   observeEvent(input$sqlGo1,{
     #send the statement
-    dbSendStatement(con,input$sql1)
+    
+    query = tryCatch({
+      dbSendStatement(con,input$sql1)
+      output$sql1Invalid <- renderText({ '' })
+    }, error = function(e){
+      output$sql1Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
+    })
+    
     
     #Rerendering all tables so that the changes can be shown in the app
     ##Appointments
@@ -458,6 +506,42 @@ server <- function(input, output, session) {
     tableEMPA = dbGetQuery(con,queryEMPA)
     output$tableEMPA <- DT::renderDataTable(tableEMPA,filter = 'top')
   })
+  
+  # Receptionist Appointment 
+  observeEvent(input$sqlGo2,{
+    #send the statement
+    
+    query = tryCatch({
+      dbSendStatement(con,input$sql2)
+      output$sql2Invalid <- renderText({ '' })
+    }, error = function(e){
+      output$sql2Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
+    })
+
+    #Rerendering all tables so that the changes can be shown in the app
+    ##Appointments
+    queryAPTR = paste('SELECT * FROM appointment')
+    tableAPTR = dbGetQuery(con,queryAPTR)
+    output$tableAPTR <- DT::renderDataTable(tableAPTR,filter = 'top')
+  })
+  
+  # Receptionist Patients 
+  observeEvent(input$sqlGo3,{
+    #send the statement
+    query = tryCatch({
+      dbSendStatement(con,input$sql3)
+      output$sql3Invalid <- renderText({ '' })
+    }, error = function(e){
+      output$sql3Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
+    })
+    
+    #Rerendering all tables so that the changes can be shown in the app
+    ##Appointments
+    queryPATR = paste('SELECT * FROM patient')
+    tablePATR = dbGetQuery(con,queryPATR)
+    output$tablePATR <- DT::renderDataTable(tablePATR,filter = 'top')
+  })
+  
   
   vb <- reactiveValues()
   vb <- reactiveValues(Valid=FALSE)
