@@ -10,6 +10,7 @@ library(DT)
 library(data.table)
 library(lubridate)
 library(shinyalert)
+library(sjmisc)
 
 # UI
 ui <- dashboardPage(
@@ -573,7 +574,6 @@ server <- function(input, output, session) {
       output$sql1Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
     })
     
-    
     #Rerendering all tables so that the changes can be shown in the app
     ##Appointments
     queryAPTA = 'SELECT * FROM appointment order by id desc'
@@ -598,8 +598,12 @@ server <- function(input, output, session) {
     #send the statement
     
     query = tryCatch({
-      dbSendStatement(con,input$sql2)
-      output$sql2Invalid <- renderText({ '' })
+      if(!str_contains(input$sql2, "INSERT INTO appointment", ignore.case = TRUE)){
+        output$sql2Invalid <- renderText({ 'You may only make queries to the "appointment" table.' })
+      } else {
+        dbSendStatement(con,input$sql2)
+        output$sql2Invalid <- renderText({ '' })
+      }
     }, error = function(e){
       output$sql2Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
     })
@@ -615,8 +619,12 @@ server <- function(input, output, session) {
   observeEvent(input$sqlGo3,{
     #send the statement
     query = tryCatch({
-      dbSendStatement(con,input$sql3)
-      output$sql3Invalid <- renderText({ '' })
+      if(str_contains(input$sql3, "INSERT INTO patient", ignore.case = TRUE)){
+        dbSendStatement(con,input$sql3)
+        output$sql3Invalid <- renderText({ '' })
+      } else {
+        output$sql3Invalid <- renderText({ 'You may only make queries to the "patient" table.' })
+      }
     }, error = function(e){
       output$sql3Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
     })
