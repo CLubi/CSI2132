@@ -4,6 +4,11 @@ create table roles (
 	role_name varchar(15) NOT NULL
 );
 
+Create table branch (
+    id int primary key,
+    city varchar(15) NOT NULL
+);
+
 create table employee (
 	id int primary key, 
 	firstname varchar(15) NOT NULL,
@@ -16,7 +21,18 @@ create table employee (
 	salary numeric(8,2) NOT NULL,
 	manager_id int,
 	role_id int NOT NULL,
-	branch_id int NOT NULL
+	branch_id int NOT NULL,
+    foreign key (manager_id) references employee(id),
+    foreign key (role_id) references roles(id),
+    foreign key (branch_id) references branch(id)
+);
+
+CREATE TABLE manager_branch (
+    manager_id int,
+    branch_id int,
+    primary key (manager_id, branch_id),
+    foreign key (manager_id) references employee(id),
+    foreign key (branch_id) references branch(id)
 );
 
 Create table patient(
@@ -38,49 +54,35 @@ CREATE TABLE users (
 	email varchar(40) NOT NULL, 
 	phonenumber varchar(10) NOT NULL,
 	dob date NOT NULL,
-	employee_id int
+	employee_id int,
+    foreign key (employee_id) references employee(id)
 );
 
-Create table appointment (
+CREATE TABLE patient_user (
+    user_id int,
+    patient_id int,
+    primary key (user_id, patient_id),
+    foreign key (user_id) references users(id),
+    foreign key (patient_id) references patient(id)
+);
+
+Create table reviews (
     id int primary key,
-    appt_type varchar(15) NOT NULL, 
-    room varchar(10),
-    status varchar(15),
+    professionalism int NOT NULL,
+    communication int NOT NULL, 
+    cleanliness int NOT NULL,
+    review_value int NOT NULL,
     patient_id int NOT NULL,
-    employee_id int NOT NULL,
-    timeslot_id int NOT NULL,
-    invoice_id int
+    branch_id int  NOT NULL,
+    Foreign Key(patient_id)  references patient(id),
+    Foreign Key(branch_id)  references branch(id)
 );
 
-Create table appt_procedure (
+Create table time_slot(
     id int primary key,
-    description varchar(40),
-    procedure_type varchar(15),
-    tooth varchar(15) NOT NULL,
-    amount varchar(15),
-    appt_id int NOT NULL,
-    fee_id int NOT NULL
-);
-
-Create table insurance_claim (
-    id int primary key,
-    insurance_method varchar(15),
-    claim_date date NOT NULL,
-    patient_id int NOT NULL,
-    payment_id int NOT NULL
-);
-
-Create table payment(
-    id int primary key,
-    payment_method varchar(15) NOT NULL,
-    payment_date date NOT NULL, 
-    invoice_id int NOT NULL
-);
-
-Create table fee_charge(
-    id int primary key,
-    code varchar(5) NOT NULL,
-    charge numeric(7,2) NOT NULL
+    start_time time NOT NULL,
+    end_time time NOT NULL,
+    slot_date date NOT NULL
 );
 
 Create table invoice(
@@ -92,108 +94,63 @@ Create table invoice(
     penalty_cost numeric(7,2)
 );
 
-Create table time_slot(
+Create table appointment (
     id int primary key,
-    start_time time NOT NULL,
-    end_time time NOT NULL,
-    slot_date date NOT NULL
-);
-
-Create table reviews (
-    id int primary key,
-    professionalism int NOT NULL,
-    communication int NOT NULL, 
-    cleanliness int NOT NULL,
-    review_value int NOT NULL,
+    appt_type varchar(15) NOT NULL, 
+    room varchar(10),
+    status varchar(15),
     patient_id int NOT NULL,
-    branch_id int  NOT NULL
+    employee_id int NOT NULL,
+    timeslot_id int NOT NULL,
+    invoice_id int,
+    foreign key(patient_id) references patient(id),
+    foreign key(employee_id) references employee(id),
+    foreign key(invoice_id) references invoice(id),
+    foreign key(timeslot_id) references time_slot(id)
 );
 
-Create table branch (
+Create table fee_charge(
     id int primary key,
-    city varchar(15) NOT NULL
+    code varchar(5) NOT NULL,
+    charge numeric(7,2) NOT NULL
+);
+
+Create table appt_procedure (
+    id int primary key,
+    description varchar(40),
+    procedure_type varchar(15),
+    tooth varchar(15) NOT NULL,
+    amount varchar(15),
+    appt_id int NOT NULL,
+    fee_id int NOT NULL,
+    foreign key(appt_id) references appointment(id),
+    foreign key(fee_id) references fee_charge(id)
+);
+
+Create table payment(
+    id int primary key,
+    payment_method varchar(15) NOT NULL,
+    payment_date date NOT NULL, 
+    invoice_id int NOT NULL,
+    foreign key(invoice_id) references invoice(id)
+);
+
+Create table insurance_claim (
+    id int primary key,
+    insurance_method varchar(15),
+    claim_date date NOT NULL,
+    patient_id int NOT NULL,
+    payment_id int NOT NULL,
+    foreign key(patient_id) references patient(id),
+    foreign key(payment_id) references payment(id)
 );
 
 Create table records(
     id int primary key,
-    employee_id int NOT NULL
+    employee_id int NOT NULL,
+    foreign key(employee_id) references employee(id),
+    foreign key(id) references patient(id)
 );
-
-CREATE TABLE patient_user (
-    user_id int,
-    patient_id int,
-    primary key (user_id, patient_id)
-);
-
-CREATE TABLE manager_branch (
-    manager_id int,
-    branch_id int,
-    primary key (manager_id, branch_id)
-);
-
--- add foreign key constraint
-Alter table Users
-add constraint fk_employee_id Foreign Key(employee_id) References employee(id);
-
-Alter table employee
-add constraint fk_manager_id Foreign Key(manager_id) References employee(id);
-
-Alter table employee
-add constraint fk_role_id Foreign Key(role_id) References roles(id);
-
-ALTER TABLE appt_procedure 
-add constraint fk_appt_id Foreign Key(appt_id) References appointment(id);
-
-ALTER TABLE appt_procedure 
-add constraint fk_fee_id Foreign Key(fee_id) References fee_charge(id); 
-
-ALTER TABLE appointment 
-add constraint fk_patient_id Foreign Key(patient_id) References patient(id); 
-
-ALTER TABLE appointment 
-add constraint fk_employee_id Foreign Key(employee_id) References employee(id); 
-
-ALTER TABLE appointment 
-add constraint fk_invoice_id Foreign Key(invoice_id) References invoice(id); 
-
-ALTER TABLE appointment 
-add constraint fk_timeslot_id Foreign Key(timeslot_id) References time_slot(id);
-
-ALTER TABLE payment
-add constraint fk_invoice_id Foreign Key(invoice_id) References invoice(id); 
-
-ALTER TABLE insurance_claim
-add constraint fk_patient_id Foreign Key(patient_id) References patient(id); 
-
-ALTER TABLE insurance_claim
-add constraint fk_payment_id Foreign Key(payment_id) References payment(id);
-
-Alter table reviews 
-add constraint fk_patient_id Foreign Key(patient_id)  references patient(id); 
-
-Alter table reviews 
-add constraint fk_branch_id Foreign Key(branch_id)  references branch(id);
-
-Alter table employee
-add constraint fk_branch_id Foreign Key(branch_id)  references branch(id);
-
-Alter table records
-add constraint fk_employee_id Foreign Key(employee_id) references employee(id); 
-
-Alter table records
-add constraint fk_patient_id Foreign Key(id) references patient(id);
-
-Alter table patient_user
-add constraint fk_user_id Foreign Key(user_id) references users(id);
-
-Alter table patient_user
-add constraint fk_patient_id Foreign Key(patient_id) references patient(id);
-
-Alter table manager_branch
-add constraint fk_manager_id Foreign Key(manager_id) references employee(id);
-
-Alter table manager_branch
-add constraint fk_branch_id Foreign Key(branch_id) references branch(id);
 
 -- insert values
 INSERT INTO roles (id, role_name)
@@ -256,7 +213,7 @@ values
 (7, 'abcdef', 'Alice', 'King', 'alice@gmail.com', 2090291901, '1997-03-01', NULL),
 (8, 'abcdef', 'Imran', 'Khan', 'imran@gmail.com', 2990291901, '1990-09-01', NULL),
 (9, 'abcdef', 'Ali', 'Moe', 'ali@gmail.com', 2990261901, '2000-09-01', NULL),
-(10, 'abdcef', 'Steve', 'Johnson', 'stevejohnson@gmail.com', '1234567890', '1970-01-01', 1),
+(10, 'abcdef', 'Steve', 'Johnson', 'stevejohnson@gmail.com', '1234567890', '1970-01-01', 1),
 (11, 'abcdef', 'Alan', 'Lee', 'alanlee@gmail.com', '1234567891', '1965-01-02', 2),
 (12, 'abcdef', 'Daisy', 'Wilson', 'daisywilson@gmail.com', '1234567892', '1960-01-03', 3),
 (13, 'abcdef', 'William', 'Jackson', 'williamjackson@gmail.com', '1234567893', '1969-01-04', 4),
@@ -265,7 +222,7 @@ values
 (16,'abcdef', 'Aisha', 'Malik', 'aishamalik@gmail.com', '1234567896', '1968-01-07', 7),
 (17, 'abcdef', 'Mike', 'Jordan', 'mikejordan@gmail.com', '1234567897', '1956-01-08', 8),
 (18, 'abcdef', 'Pam', 'Be', 'pambe@gmail.com', '1234567898', '1984-01-09', 9),
-(19, 'abdcef', 'Ron', 'James', 'ronjames@gmail.com', '1234567899', '1970-01-10', 10),
+(19, 'abcdef', 'Ron', 'James', 'ronjames@gmail.com', '1234567899', '1970-01-10', 10),
 (20, 'abcdef', 'Aalia', 'Fisher', 'aaliafisher@gmail.com', '1234567900', '1971-01-11', 11),
 (21, 'abcdef', 'Romilly', 'Boyle', 'romillyboyle@gmail.com', '1234567901', '1972-01-12', 12),
 (22, 'abcdef', 'Wilfred', 'Maguire', 'wilfredmaguire@gmail.com', '1234567902', '1973-01-13', 13),
@@ -276,7 +233,7 @@ values
 INSERT INTO patient_user (user_id,patient_id)
 values (1, 1), 
 (1,2),
-(2,3), 
+(2,3),
 (3,4), 
 (4,5), 
 (5,6), 
