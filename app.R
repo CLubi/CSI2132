@@ -11,11 +11,12 @@ library(data.table)
 library(lubridate)
 library(shinyalert)
 library(sjmisc)
+library(shinydashboard)
 
 # UI
 ui <- dashboardPage(
-    dashboardHeader(title = "Dental Clinic"),
-    dashboardSidebar(
+        dashboardHeader(title = "Dental Clinic"),
+        dashboardSidebar(
         sidebarMenu(
             menuItem("Authentification",tabName = "aut", icon = icon("trophy",lib = 'font-awesome')),
             
@@ -63,8 +64,7 @@ ui <- dashboardPage(
             tabItem('aptC',
                     fluidPage(
                       h1("Appointments"),
-                      DT::dataTableOutput('tableAPTC'),
-                      h1("Book Appointment"),
+                      h2("Book Appointment"),
                       div(class = NA, style="display:inline-block",
                         selectInput(inputId = 'apptPatientInput',
                                     label = 'Patient',
@@ -82,7 +82,7 @@ ui <- dashboardPage(
                                     label = 'Tooth',
                                     choices=c("All","Canine","Incisor", "Premolar", "1st Premolar", "2nd Premolar", "Molar","2nd Molar", "3rd Molar"),
                                     selected = 'Alls',
-                                    multiple = TRUE )),
+                                    multiple = FALSE )),
                       div(class = NA, style="display:inline-block",
                           selectInput(inputId = 'apptBranchInput',
                                       label = 'Location',
@@ -107,7 +107,8 @@ ui <- dashboardPage(
                                     seconds = FALSE,
                                     minute.steps = 60)),
                       textOutput("invalidBooking"),
-                      actionButton("bookAction","Book",icon = icon("calendar-plus",lib = 'font-awesome'))
+                      actionButton("bookAction","Book",icon = icon("calendar-plus",lib = 'font-awesome')),
+                      DT::dataTableOutput('tableAPTC'),
                     )
             ),
             tabItem('recC',
@@ -306,7 +307,7 @@ server <- function(input, output, session) {
       })
       
       u_id = strtoi(input$userName, base=0L)
-      queryAPTC = paste('SELECT (P.firstname, P.lastname) AS "patient_name", A."appt_type", B."city" AS "branch", T."slot_date" AS "date", T."start_time" AS "time", (E.firstname, E.lastname) AS "employee_name", A."room", A."status", A."invoice_id" FROM appointment as A, patient as P, employee as E, time_slot as T, branch as B WHERE A.patient_id = P.id AND A.patient_id IN (SELECT patient_id FROM patient_user WHERE user_id = ',u_id,') AND A.employee_id = E.id AND A.timeslot_id = T.id AND E.branch_id = B.id order by patient_id asc',collapse=NULL)
+      queryAPTC = paste('SELECT (P.firstname, P.lastname) AS "patient_name", A."appt_type", B."city" AS "branch", T."slot_date" AS "date", T."start_time" AS "time", (E.firstname, E.lastname) AS "employee_name", A."room", A."status", A."invoice_id" FROM appointment as A, patient as P, employee as E, time_slot as T, branch as B WHERE A.patient_id = P.id AND A.patient_id IN (SELECT patient_id FROM patient_user WHERE user_id = ',u_id,') AND A.employee_id = E.id AND A.timeslot_id = T.id AND E.branch_id = B.id order by date asc',collapse=NULL)
       tableAPTC = dbGetQuery(con,queryAPTC)
       output$tableAPTC <- DT::renderDataTable(tableAPTC,filter = 'top')
       
@@ -346,6 +347,74 @@ server <- function(input, output, session) {
       
       output$recC <- renderMenu({
         menuItem("Records",tabName = "recC", icon = icon("file-medical",lib = 'font-awesome'))
+      })
+      
+      observeEvent(input$bookAction, {
+        
+        employeeFirstName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][2]
+        employeeLastName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][3]
+        
+        patientFirstName = strsplit(input$apptPatientInput, "[,()]+")[[1]][2]
+        patientLastName = strsplit(input$apptPatientInput, "[,()]+")[[1]][3]
+        
+        apptTime = strftime(input$apptTimeInput, "%T")
+        apptDate = as.character(input$apptDateInput)
+        
+        employeeApptTimesQuery = paste("SELECT T.start_time, T.slot_date FROM time_slot as T Right Join appointment as A on T.id = A.timeslot_id Left Join employee as E on E.id = A.employee_id WHERE E.firstname = \'", employeeFirstName, "\' and E.lastname = \'",employeeLastName, "\'", sep="",collapse=NULL)
+        employeeApptTimesTable = dbGetQuery(con, employeeApptTimesQuery)
+        
+        employeeApptTimesTable$start_time = as.character(employeeApptTimesTable$start_time)
+        employeeApptTimesTable$slot_date = as.character(employeeApptTimesTable$slot_date)
+        
+        if( is.null(input$apptToothInput)){
+          output$invalidBooking <- renderText({ 'Booking cannot be completed without tooth information.' })
+          #vb$Valid = FALSE
+        } else if ( 9 > strtoi(strftime(input$apptTimeInput, "%H"), base=0L) | strtoi(strftime(input$apptTimeInput, "%H"), base=0L) > 16){
+          output$invalidBooking <- renderText({ 'Booking time must be between 09h and 16h' })
+          #vb$Valid = FALSE
+        } else if ((apptTime %in% employeeApptTimesTable$start_time) & apptDate %in% employeeApptTimesTable[which(employeeApptTimesTable$start_time == apptTime),which(colnames(employeeApptTimesTable) == 'slot_date')]){
+          output$invalidBooking <- renderText({ 'This practicioner is not available at this time.' })
+          #vb$Valid = FALSE
+        } else {
+          query = tryCatch({
+            apptIdQuery = 'SELECT id from appointment order by id desc'
+            apptIdTable = dbGetQuery(con, apptIdQuery)
+            apptNum = apptIdTable[[1]][1] + 1
+            
+            timeslotIdQuery = 'SELECT id from time_slot order by id desc'
+            timeslotIdTable = dbGetQuery(con, timeslotIdQuery)
+            timeslotId = timeslotIdTable[[1]][1] + 1
+            
+            timeslotQuery = paste("INSERT INTO time_slot VALUES (",timeslotId,", \'", apptTime,"\', NULL, \'", apptDate,"\')")
+            dbSendStatement(con,timeslotQuery)
+            
+            patientIdQuery = paste("SELECT id FROM patient WHERE (firstname = \'", patientFirstName,"\') AND (lastname = \'",patientLastName,"\')", sep="", collapse=NULL)
+            patientIdQueryTable = dbGetQuery(con, patientIdQuery)
+            patientId =  patientIdQueryTable[[1]][1]
+            
+            employeeIdQuery = paste("SELECT id FROM employee WHERE (firstname = \'", employeeFirstName,"\') AND (lastname = \'",employeeLastName,"\')", sep="", collapse=NULL)
+            employeeIdQueryTable = dbGetQuery(con, employeeIdQuery)
+            employeeId = employeeIdQueryTable[[1]][1]
+            
+            if(input$apptTypeInput == "Extraction" & input$apptToothInput == "3rd Molar"){
+              apptType = "Wisdom Teeth"
+            } else {
+              apptType = input$apptTypeInput[[1]]
+            }
+            
+            newAppt = paste("INSERT INTO appointment VALUES (",apptNum,", \'", apptType,"\', NULL, NULL, \'",patientId,"\', \'",employeeId,"\', ",timeslotId,", NULL)")
+            dbSendStatement(con,newAppt)
+            output$invalidBooking <- renderText({ 'Appointment succesfully booked' })
+            
+            u_id = strtoi(input$userName, base=0L)
+            queryAPTC = paste('SELECT (P.firstname, P.lastname) AS "patient_name", A."appt_type", B."city" AS "branch", T."slot_date" AS "date", T."start_time" AS "time", (E.firstname, E.lastname) AS "employee_name", A."room", A."status", A."invoice_id" FROM appointment as A, patient as P, employee as E, time_slot as T, branch as B WHERE A.patient_id = P.id AND A.patient_id IN (SELECT patient_id FROM patient_user WHERE user_id = ',u_id,') AND A.employee_id = E.id AND A.timeslot_id = T.id AND E.branch_id = B.id order by date asc',collapse=NULL)
+            tableAPTC = dbGetQuery(con,queryAPTC)
+            output$tableAPTC <- DT::renderDataTable(tableAPTC,filter = 'top')
+            
+          }, error = function(e){
+            output$invnalidBooking <- renderText({ 'Sorry, it looks like something went wrong.' })
+          })
+        }
       })
 
     }
@@ -463,7 +532,7 @@ server <- function(input, output, session) {
           menuItem("Patients",tabName = "patR", icon = icon("hospital-user",lib = 'font-awesome'))
         })
         
-         queryPATR = paste('SELECT * FROM patient')
+        queryPATR = paste('SELECT * FROM patient')
         tablePATR = dbGetQuery(con,queryPATR)
         output$tablePATR <- DT::renderDataTable(tablePATR,filter = 'top')
 
@@ -634,32 +703,6 @@ server <- function(input, output, session) {
     queryPATR = paste('SELECT * FROM patient')
     tablePATR = dbGetQuery(con,queryPATR)
     output$tablePATR <- DT::renderDataTable(tablePATR,filter = 'top')
-  })
-  
-  
-  vb <- reactiveValues()
-  vb <- reactiveValues(Valid=FALSE)
-  
-  observeEvent(input$bookAction, {
-    
-    employeeFirstName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][2]
-    employeeLastName = strsplit(input$apptEmployeeInput, "[,()]+")[[1]][3]
-    apptTime = strftime(input$apptTimeInput, "%T")
-    
-    employeeApptTimesQuery = paste("SELECT T.start_time, T.slot_date FROM time_slot as T Right Join appointment as A on T.id = A.timeslot_id Left Join employee as E on E.id = A.employee_id WHERE E.firstname = \'", employeeFirstName, "\' and E.lastname = \'",employeeLastName, "\'", sep="",collapse=NULL)
-    employeeApptTimesTable = dbGetQuery(con, employeeApptTimesQuery)
-    print(employeeApptTimesTable)
-    
-    #print((apptTime %in% employeeApptTimesTable$start_time) & input$apptDateInput %in% employeeApptTimesTable[which(employeeApptTimesTable$start_time == apptTime),which(colnames(employeeApptTimesTable) == 'slot_date')])
-        
-    if( is.null(input$apptToothInput)){
-      output$invalidBooking <- renderText({ 'Booking cannot be completed without tooth information.' })
-      vb$Valid = FALSE
-    }
-    else if ( 9 > strtoi(strftime(input$apptTimeInput, "%H"), base=0L) | strtoi(strftime(input$apptTimeInput, "%H"), base=0L) > 16){
-      output$invalidBooking <- renderText({ 'Booking time must be between 09h and 16h' })
-      vb$Valid = FALSE
-    }
   })
   
 }
