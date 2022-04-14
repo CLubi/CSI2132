@@ -95,7 +95,7 @@ Create table invoice(
 Create table time_slot(
     id int primary key,
     start_time time NOT NULL,
-    end_time time NOT NULL,
+    end_time time,
     slot_date date NOT NULL
 );
 
