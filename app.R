@@ -108,7 +108,7 @@ ui <- dashboardPage(
                                     minute.steps = 60)),
                       textOutput("invalidBooking"),
                       actionButton("bookAction","Book",icon = icon("calendar-plus",lib = 'font-awesome')),
-                      DT::dataTableOutput('tableAPTC'),
+                      DT::dataTableOutput('tableAPTC')
                     )
             ),
             tabItem('recC',
@@ -119,11 +119,9 @@ ui <- dashboardPage(
                       h2("Invoices"),
                       DT::dataTableOutput('tableINVC'),
                       h2("Insurance Claims and Payments"),
-                      DT::dataTableOutput('tableINSC'),
-                      
+                      DT::dataTableOutput('tableINSC')
                     )
-            )
-            ,
+            ),
 
             #Admin/Manager Sidebar
             tabItem('aptA',
@@ -136,27 +134,13 @@ ui <- dashboardPage(
                     fluidPage(
                       hr(),
                       h1("Records"),
-                      column(6,offset = 6,
-                             HTML('<div class="btn-group" role="group" aria-label="Basic example" style = "padding:10px">'),
-                             ### tags$head() This is to change the color of "Add a new row" button
-                             tags$head(tags$style(".butt2{background-color:#231651;} .butt2{color: #e6ebef;}")),
-                             div(style="display:inline-block;width:30%;text-align: center;",actionButton(inputId = "RECA_Add_row",label = "Add", class="butt2") ),
-                             #tags$head(tags$style(".butt4{background-color:#4d1566;} .butt4{color: #e6ebef;}")),
-                             #div(style="display:inline-block;width:30%;text-align: center;",actionButton(inputId = "RECA_Mod_row",label = "Edit", class="butt4") ),
-                             tags$head(tags$style(".butt3{background-color:#590b25;} .butt3{color: #e6ebef;}")),
-                             div(style="display:inline-block;width:30%;text-align: center;",actionButton(inputId = "RECA_Del_row",label = "Delete", class="butt3") ),
-                             HTML('</div>') ),
-                      DT::dataTableOutput('tableRECA'),
-                      tags$script("$(document).on('click', '#tableRECA button', function () {
-                   Shiny.onInputChange('lastClickId',this.id);
-                   Shiny.onInputChange('lastClick', Math.random()) });"),
-                      actionButton(inputId = "Updated_RECA",label = "Save")
+                      DT::dataTableOutput('tableRECA')
                     )
             ),
             tabItem('patA',
                     fluidPage(
                       h1("Patients"),
-                      DT::dataTableOutput('tablePATA'),
+                      DT::dataTableOutput('tablePATA')
                       
                     )
             ),
@@ -231,14 +215,13 @@ ui <- dashboardPage(
             )
             
         )
-        
     )
     
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
-
+  
   #return query of users
   queryLogin = 'Select a.id as user_id,a.firstname,a.lastname, a.password, a.employee_id, b.role_id,c.role_name,d.patient_id
               	from users as a
@@ -258,22 +241,22 @@ server <- function(input, output, session) {
   
   rv <- reactiveValues(tableRECA = NULL)
   rv <- reactiveValues(qr_RECA = c())
-
-    
+  
+  
   #Observing the click of the login button
   observeEvent(input$loginAction,{
     #Not null not string user name and password
     if( is.null(input$userName) |input$userName == '' | is.null(input$password) | input$password == '' ){
-        output$invalidLogin <- renderText({ 'Invalid Login. Specify both a user name and password.' })
-        rv$Authenticated = FALSE
+      output$invalidLogin <- renderText({ 'Invalid Login. Specify both a user name and password.' })
+      rv$Authenticated = FALSE
     }
-  
+    
     # User name is not valid or password is incorrect
     else if( !(input$userName %in% users$user_id) | 
-        input$password != unique(users[which(users$user_id == input$userName),which(colnames(users) == 'password')])[1]
-        ){
-        output$invalidLogin <- renderText({ 'Invalid Login' })
-        rv$Authenticated = FALSE
+             input$password != unique(users[which(users$user_id == input$userName),which(colnames(users) == 'password')])[1]
+    ){
+      output$invalidLogin <- renderText({ 'Invalid Login' })
+      rv$Authenticated = FALSE
     } 
     
     # else the user has been authenticated but we need to check if they have the ability to login as the specified type.
@@ -293,17 +276,17 @@ server <- function(input, output, session) {
       }
     }
   })
-
+  
   
   #Observing the click of the login button
   observeEvent(input$loginAction,{
     #If authenticated then show the various tabs
-
+    
     #If authenticated as a client then show the client tabs.
     if (rv$Authenticated == TRUE & input$type == 'Client') {
-
+      
       output$aptC <- renderMenu({
-          menuItem("Appointments",tabName = "aptC", icon = icon("calendar-check",lib = 'font-awesome'))
+        menuItem("Appointments",tabName = "aptC", icon = icon("calendar-check",lib = 'font-awesome'))
       })
       
       u_id = strtoi(input$userName, base=0L)
@@ -420,14 +403,14 @@ server <- function(input, output, session) {
     }
     #If authenticated as an employee then
     else if(rv$Authenticated == TRUE & input$type == 'Employee'){
-
+      
       #find employee role_id
       role_id = unique(users[which(users$user_id == input$userName),which(colnames(users) == 'role_id')])[1]
       employee_id = unique(users[which(users$user_id == input$userName),which(colnames(users) == 'employee_id')])[1]
-
+      
       #if role_id is 1 then the user is a branch manager so output the branch manager tabs
       if(role_id == 1){
-
+        
         #output the appointment as Admin tab
         output$aptA <- renderMenu({
           menuItem("Appointments",tabName = "aptA", icon = icon("calendar-check",lib = 'font-awesome'))
@@ -437,7 +420,7 @@ server <- function(input, output, session) {
         tableAPTA = dbGetQuery(con,queryAPTA)
         output$tableAPTA <- renderDT(tableAPTA,editable = 'all')
         
-
+        
         #output the records as Admin tab
         output$recA <- renderMenu({
           menuItem("Records",tabName = "recA", icon = icon("file-medical",lib = 'font-awesome'))
@@ -446,7 +429,7 @@ server <- function(input, output, session) {
         queryRECA = 'SELECT * FROM records order by id desc'
         rv$tableRECA = dbGetQuery(con,queryRECA)
         output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
-
+        
         #output the patient as an admin tab
         output$patA <- renderMenu({
           menuItem("Patients",tabName = "patA", icon = icon("hospital-user",lib = 'font-awesome'))
@@ -454,7 +437,7 @@ server <- function(input, output, session) {
         queryPATA = 'SELECT * FROM patient order by id asc'
         tablePATA = dbGetQuery(con,queryPATA)
         output$tablePATA <- DT::renderDataTable(tablePATA,filter = 'top')
-
+        
         #output the employee as Admin tab
         output$empA <- renderMenu({
           menuItem("Employee",tabName = "empA", icon = icon("user-nurse",lib = 'font-awesome'))
@@ -462,17 +445,17 @@ server <- function(input, output, session) {
         queryEMPA = 'SELECT * FROM employee order by id asc'
         tableEMPA = dbGetQuery(con,queryEMPA)
         output$tableEMPA <- DT::renderDataTable(tableEMPA,filter = 'top')
-
+        
         #output the sql
         output$sqlA <- renderMenu({
           menuItem("SQL",tabName = "sqlA", icon = icon("code",lib = 'font-awesome'))
         })
         
       }
-
+      
       #if role_id is 2 or 3 then  then the user is a dentist or hygenist so output the hygienist/dentist tabs
       if(role_id == 2 | role_id == 3){
-
+        
         #output appointment as a dentist/hygienist tab
         output$aptD <- renderMenu({
           menuItem("Appointments",tabName = "aptD", icon = icon("calendar-check",lib = 'font-awesome'))
@@ -481,12 +464,12 @@ server <- function(input, output, session) {
         queryAPTD = paste('SELECT a.id as Appointment_ID, a.status,c.slot_date as Date, c.start_time, c.end_time, a.appt_type, a.room, a.patient_id, b.firstname,b.lastname, a.employee_id,a.invoice_id
                             FROM appointment as a, patient as b, time_slot as c
                             where employee_id =', employee_id, 
-                            'And a.patient_id = b.id
+                          'And a.patient_id = b.id
                             And a.timeslot_id = c.id')
         
         tableAPTD = dbGetQuery(con,queryAPTD)
         output$tableAPTD <- DT::renderDataTable(tableAPTD,filter = 'top')
-
+        
         #output patient as dentist/hygienist tab
         output$patD <- renderMenu({
           menuItem("Patients",tabName = "patD", icon = icon("hospital-user",lib = 'font-awesome'))
@@ -495,17 +478,17 @@ server <- function(input, output, session) {
         queryPATD = paste('Select * from patient Where id in (Select distinct patient_id from appointment Where employee_id =',employee_id,')')
         tablePATD = dbGetQuery(con,queryPATD)
         output$tablePATD = DT::renderDataTable(tablePATD, filter = 'top')
-
+        
       }
-
+      
       #if role_id is 4 then the user is a receptionist so output the receptionist tabs
       if(role_id == 4){
-
+        
         #output appointment as a receptionist
         output$aptR <- renderMenu({
           menuItem("Appointments",tabName = "aptR", icon = icon("calendar-check",lib = 'font-awesome'))
         })
-
+        
         queryAPTR = paste('SELECT * FROM appointment')
         tableAPTR = dbGetQuery(con,queryAPTR)
         output$tableAPTR <- DT::renderDataTable(tableAPTR,filter = 'top')
@@ -514,7 +497,7 @@ server <- function(input, output, session) {
         output$recR <- renderMenu({
           menuItem("Records",tabName = "recR", icon = icon("file-medical",lib = 'font-awesome'))
         })
-
+        
         queryINVR = paste('SELECT * FROM invoice')
         tableINVR = dbGetQuery(con,queryINVR)
         output$tableINVR <- DT::renderDataTable(tableINVR,filter = 'top')
@@ -535,16 +518,16 @@ server <- function(input, output, session) {
         queryPATR = paste('SELECT * FROM patient')
         tablePATR = dbGetQuery(con,queryPATR)
         output$tablePATR <- DT::renderDataTable(tablePATR,filter = 'top')
-
+        
       }
-
-
+      
+      
     }
-
+    
   })
   
-# Admind table edit priviledges
-## Records tab
+  # Admind table edit priviledges
+  ## Records tab
   observeEvent(input$RECA_Add_row, {
     ### This is the pop up board for input a new row in RECA table
     showModal(modalDialog(title = "Add a new row",
@@ -562,8 +545,8 @@ server <- function(input, output, session) {
       
     )
     rv$qr_RECA = c(rv$qr_RECA,
-      paste('insert into records (id, employee_id) values (',input[[paste0("RECA_id", input$RECA_Add_row)]],',',input[[paste0("RECA_employee_id", input$RECA_Add_row)]],')'
-            )
+                   paste('insert into records (id, employee_id) values (',input[[paste0("RECA_id", input$RECA_Add_row)]],',',input[[paste0("RECA_employee_id", input$RECA_Add_row)]],')'
+                   )
     )
     
     removeModal()
@@ -621,7 +604,7 @@ server <- function(input, output, session) {
   
   
   
-## Admin SQL tab
+  ## Admin SQL tab
   observeEvent(input$sqlGo,{
     
     query = tryCatch({
@@ -676,7 +659,7 @@ server <- function(input, output, session) {
     }, error = function(e){
       output$sql2Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
     })
-
+    
     #Rerendering all tables so that the changes can be shown in the app
     ##Appointments
     queryAPTR = paste('SELECT * FROM appointment')
@@ -690,7 +673,7 @@ server <- function(input, output, session) {
     query = tryCatch({
       if(str_contains(input$sql3, "INSERT INTO patient", ignore.case = TRUE)){
         dbSendStatement(con,input$sql3)
-        output$sql3Invalid <- renderText({ '' })
+        output$sql3Invalid <- renderText({ 'Query successful.' })
       } else {
         output$sql3Invalid <- renderText({ 'You may only make queries to the "patient" table.' })
       }
