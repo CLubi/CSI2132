@@ -130,13 +130,6 @@ ui <- dashboardPage(
                       DTOutput('tableAPTA')
                     )
             ),
-            tabItem('recA',
-                    fluidPage(
-                      hr(),
-                      h1("Records"),
-                      DT::dataTableOutput('tableRECA')
-                    )
-            ),
             tabItem('patA',
                     fluidPage(
                       h1("Patients"),
@@ -179,9 +172,8 @@ ui <- dashboardPage(
                       h1("Patients"),
                       DT::dataTableOutput('tablePATD')
                     )
-            )
-            ,
-
+            ),
+           
             # Receptionist Sidebar items
             tabItem('aptR',
                     fluidPage(
@@ -238,9 +230,6 @@ server <- function(input, output, session) {
   
   rv <- reactiveValues()
   rv <- reactiveValues(Authenticated=FALSE)
-  
-  rv <- reactiveValues(tableRECA = NULL)
-  rv <- reactiveValues(qr_RECA = c())
   
   
   #Observing the click of the login button
@@ -422,13 +411,6 @@ server <- function(input, output, session) {
         
         
         #output the records as Admin tab
-        output$recA <- renderMenu({
-          menuItem("Records",tabName = "recA", icon = icon("file-medical",lib = 'font-awesome'))
-        })
-        
-        queryRECA = 'SELECT * FROM records order by id desc'
-        rv$tableRECA = dbGetQuery(con,queryRECA)
-        output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
         
         #output the patient as an admin tab
         output$patA <- renderMenu({
@@ -479,6 +461,14 @@ server <- function(input, output, session) {
         tablePATD = dbGetQuery(con,queryPATD)
         output$tablePATD = DT::renderDataTable(tablePATD, filter = 'top')
         
+        #output$proD <- renderMenu({
+        #  menuItem("Procedures",tabName = "proD", icon = icon("hospital-user",lib = 'font-awesome'))
+        #})
+        
+        #queryPROD = paste('Select * from appt_procedure')
+        #tablePROD = dbGetQuery(con,queryPROD)
+        #output$tablePROD = DT::renderDataTable(tablePROD, filter = 'top')
+        
       }
       
       #if role_id is 4 then the user is a receptionist so output the receptionist tabs
@@ -525,84 +515,6 @@ server <- function(input, output, session) {
     }
     
   })
-  
-  # Admind table edit priviledges
-  ## Records tab
-  observeEvent(input$RECA_Add_row, {
-    ### This is the pop up board for input a new row in RECA table
-    showModal(modalDialog(title = "Add a new row",
-                          numericInput(paste0("RECA_id", input$RECA_Add_row), "ID:",0),  
-                          numericInput(paste0("RECA_employee_id", input$RECA_Add_row), "Employee ID:",0),
-                          actionButton("RECA_go", "Add item"),
-                          easyClose = TRUE, footer = NULL ))
-    
-  })
-  ### Add a new row to RECA table  
-  observeEvent(input$RECA_go, {
-    new_row=data.frame(
-      id=input[[paste0("RECA_id", input$RECA_Add_row)]],
-      employee_id=input[[paste0("RECA_employee_id", input$RECA_Add_row)]]
-      
-    )
-    rv$qr_RECA = c(rv$qr_RECA,
-                   paste('insert into records (id, employee_id) values (',input[[paste0("RECA_id", input$RECA_Add_row)]],',',input[[paste0("RECA_employee_id", input$RECA_Add_row)]],')'
-                   )
-    )
-    
-    removeModal()
-  })
-  
-  ### delete selected rows part
-  ### this is warning messge for deleting
-  observeEvent(input$RECA_Del_row,{
-    showModal(
-      if(length(input$tableRECA_rows_selected)>=1 ){
-        modalDialog(
-          title = "Warning",
-          paste("Are you sure delete",length(input$tableRECA_rows_selected),"rows?" ),
-          footer = tagList(
-            modalButton("Cancel"),
-            actionButton("RECA_ok", "Yes")
-          ), easyClose = TRUE)
-      }else{
-        modalDialog(
-          title = "Warning",
-          paste("Please select the row(s) that you want to delete!" ),easyClose = TRUE
-        )
-      }
-      
-    )
-  })
-  
-  ### If user say OK, then delete the selected rows
-  observeEvent(input$RECA_ok, {
-    
-    for (i in 1:length(input$tableRECA_rows_selected)) {
-      dbSendStatement(con,paste('Delete from records where id = ',rv$tableRECA$id[input$tableRECA_rows_selected[i]]))
-    }
-    
-    queryRECA = 'SELECT * FROM records order by id desc'
-    rv$tableRECA = dbGetQuery(con,queryRECA)
-    output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
-    removeModal()
-    shinyalert(title = "Deleted!", type = "success")
-  })
-  
-  observeEvent(input$Updated_RECA,{
-    for (i in 1:length(rv$qr_RECA)) {
-      dbSendStatement(con,rv$qr_RECA[i])
-    }
-    queryRECA = 'SELECT * FROM records order by id desc'
-    rv$tableRECA = dbGetQuery(con,queryRECA)
-    output$tableRECA <- DT::renderDataTable(rv$tableRECA,filter = 'top')
-    
-    rv$qr_RECA = c()
-    shinyalert(title = "Saved!", type = "success")
-    
-  })
-  
-  
-  
   
   ## Admin SQL tab
   observeEvent(input$sqlGo,{
@@ -654,7 +566,7 @@ server <- function(input, output, session) {
         output$sql2Invalid <- renderText({ 'You may only make queries to the "appointment" table.' })
       } else {
         dbSendStatement(con,input$sql2)
-        output$sql2Invalid <- renderText({ '' })
+        output$sql2Invalid <- renderText({ 'Query successful' })
       }
     }, error = function(e){
       output$sql2Invalid <- renderText({ 'Could not submit this query (syntax may be wrong).' })
@@ -673,7 +585,7 @@ server <- function(input, output, session) {
     query = tryCatch({
       if(str_contains(input$sql3, "INSERT INTO patient", ignore.case = TRUE)){
         dbSendStatement(con,input$sql3)
-        output$sql3Invalid <- renderText({ 'Query successful.' })
+        output$sql3Invalid <- renderText({ '' })
       } else {
         output$sql3Invalid <- renderText({ 'You may only make queries to the "patient" table.' })
       }
@@ -687,7 +599,6 @@ server <- function(input, output, session) {
     tablePATR = dbGetQuery(con,queryPATR)
     output$tablePATR <- DT::renderDataTable(tablePATR,filter = 'top')
   })
-  
 }
 
 # Run the application 
